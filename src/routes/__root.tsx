@@ -77,19 +77,29 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "PresenceOS — Smart Campus Attendance & Learning" },
+      {
+        name: "description",
+        content:
+          "Dynamic QR, geofencing and face-verified attendance in under 30 seconds, plus free-time learning, XP rewards and AI help.",
+      },
+      { name: "author", content: "PresenceOS" },
+      { property: "og:title", content: "PresenceOS — Smart Campus Attendance & Learning" },
+      {
+        property: "og:description",
+        content:
+          "Proxy-proof attendance, structured free time, gamified learning and institutional analytics in one campus platform.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: appCss,
+        href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
@@ -114,13 +124,67 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+const navItems = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/attendance", label: "Attendance", icon: ScanLine },
+  { to: "/timetable", label: "Free Time", icon: CalendarClock },
+  { to: "/rewards", label: "Rewards", icon: Trophy },
+  { to: "/assistant", label: "AI Tutor", icon: Sparkles },
+  { to: "/faculty", label: "Faculty", icon: LineChart },
+] as const;
+
+function AppNav() {
+  return (
+    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
+        <Link to="/" className="flex items-center gap-2">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary font-display text-sm font-bold text-primary-foreground">
+            P
+          </span>
+          <span className="font-display text-lg font-semibold tracking-tight">PresenceOS</span>
+        </Link>
+        <nav className="flex flex-1 flex-wrap items-center gap-1">
+          {navItems.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              activeOptions={{ exact: item.to === "/" }}
+              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              activeProps={{ className: "bg-secondary text-foreground" }}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="flex items-center gap-3">
+          <div className="hidden text-right sm:block">
+            <p className="text-sm font-medium leading-tight">Varun T G</p>
+            <p className="text-xs text-muted-foreground">1MS22CS118 · CSE-B</p>
+          </div>
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-secondary text-sm font-semibold">
+            VT
+          </span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <div className="min-h-screen">
+        <AppNav />
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+        </main>
+      </div>
+      <Toaster position="top-center" />
     </QueryClientProvider>
   );
 }
+
