@@ -48,7 +48,7 @@ function randomToken() {
 }
 
 function AttendancePage() {
-  const live = todaySchedule.find((s) => s.status === "live") ?? todaySchedule[0];
+  const live = todaySchedule.find((s) => s.status === "live") ?? todaySchedule[0]!;
   const [step, setStep] = useState<Step>(0);
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(false);
