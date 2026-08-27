@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AssistantRouteImport } from './routes/assistant'
 import { Route as AttendanceRouteImport } from './routes/attendance'
+import { Route as FacultyRouteImport } from './routes/faculty'
 import { Route as RewardsRouteImport } from './routes/rewards'
 import { Route as TimetableRouteImport } from './routes/timetable'
 
@@ -19,9 +21,19 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AssistantRoute = AssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AttendanceRoute = AttendanceRouteImport.update({
   id: '/attendance',
   path: '/attendance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FacultyRoute = FacultyRouteImport.update({
+  id: '/faculty',
+  path: '/faculty',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RewardsRoute = RewardsRouteImport.update({
@@ -37,34 +49,51 @@ const TimetableRoute = TimetableRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/assistant': typeof AssistantRoute
   '/attendance': typeof AttendanceRoute
+  '/faculty': typeof FacultyRoute
   '/rewards': typeof RewardsRoute
   '/timetable': typeof TimetableRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/assistant': typeof AssistantRoute
   '/attendance': typeof AttendanceRoute
+  '/faculty': typeof FacultyRoute
   '/rewards': typeof RewardsRoute
   '/timetable': typeof TimetableRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/assistant': typeof AssistantRoute
   '/attendance': typeof AttendanceRoute
+  '/faculty': typeof FacultyRoute
   '/rewards': typeof RewardsRoute
   '/timetable': typeof TimetableRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/attendance' | '/rewards' | '/timetable'
+  fullPaths:
+    '/' | '/assistant' | '/attendance' | '/faculty' | '/rewards' | '/timetable'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/attendance' | '/rewards' | '/timetable'
-  id: '__root__' | '/' | '/attendance' | '/rewards' | '/timetable'
+  to:
+    '/' | '/assistant' | '/attendance' | '/faculty' | '/rewards' | '/timetable'
+  id:
+    | '__root__'
+    | '/'
+    | '/assistant'
+    | '/attendance'
+    | '/faculty'
+    | '/rewards'
+    | '/timetable'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AssistantRoute: typeof AssistantRoute
   AttendanceRoute: typeof AttendanceRoute
+  FacultyRoute: typeof FacultyRoute
   RewardsRoute: typeof RewardsRoute
   TimetableRoute: typeof TimetableRoute
 }
@@ -78,11 +107,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/assistant': {
+      id: '/assistant'
+      path: '/assistant'
+      fullPath: '/assistant'
+      preLoaderRoute: typeof AssistantRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/attendance': {
       id: '/attendance'
       path: '/attendance'
       fullPath: '/attendance'
       preLoaderRoute: typeof AttendanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/faculty': {
+      id: '/faculty'
+      path: '/faculty'
+      fullPath: '/faculty'
+      preLoaderRoute: typeof FacultyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rewards': {
@@ -104,7 +147,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AssistantRoute: AssistantRoute,
   AttendanceRoute: AttendanceRoute,
+  FacultyRoute: FacultyRoute,
   RewardsRoute: RewardsRoute,
   TimetableRoute: TimetableRoute,
 }
