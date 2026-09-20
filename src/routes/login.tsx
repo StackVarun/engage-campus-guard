@@ -29,11 +29,17 @@ function LoginPage() {
     try {
       const result = await signIn({ data: { email, password } });
       if (!result.ok) {
-        toast.error(
-          result.error === "ACCOUNT_NOT_PROVISIONED"
-            ? "Your account is not provisioned for SCAAP yet."
-            : "Invalid email or password.",
-        );
+        if (result.error === "ACCOUNT_NOT_PROVISIONED") {
+          toast.error("Your account is not provisioned for SCAAP yet.");
+        } else if (result.error === "EMAIL_NOT_CONFIRMED") {
+          toast.error("Confirm your email first", {
+            description: "Open the confirmation link we emailed you, then sign in.",
+          });
+        } else {
+          toast.error("Invalid email or password.", {
+            description: result.message,
+          });
+        }
         return;
       }
 
