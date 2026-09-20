@@ -7,7 +7,8 @@ import { getCurrentUserServer, requireAuthenticatedUser } from "@/server/auth.se
 
 type AuthFailure = {
   ok: false;
-  error: "INVALID_CREDENTIALS" | "SIGNUP_FAILED" | "ACCOUNT_NOT_PROVISIONED";
+  error: "INVALID_CREDENTIALS" | "SIGNUP_FAILED" | "ACCOUNT_NOT_PROVISIONED" | "EMAIL_NOT_CONFIRMED";
+  message?: string;
 };
 
 type AuthSuccess = {
