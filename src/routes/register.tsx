@@ -34,9 +34,13 @@ function RegisterPage() {
     setPending(true);
 
     try {
-      const result = await register({ data: parsed.data });
+      const result = await register({
+        data: { ...parsed.data, emailRedirectTo: `${window.location.origin}/auth/callback` },
+      });
       if (!result.ok) {
-        toast.error("Unable to create the account. Check the details and try again.");
+        toast.error("Unable to create the account", {
+          description: result.message ?? "Check the details and try again.",
+        });
         return;
       }
 
