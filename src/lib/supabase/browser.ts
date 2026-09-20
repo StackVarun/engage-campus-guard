@@ -1,17 +1,8 @@
 /// <reference types="vite/client" />
 
-import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 
-let browserClient: SupabaseClient | undefined;
-
-export function getSupabaseBrowserClient() {
-  if (!browserClient) {
-    browserClient = createBrowserClient(
-      import.meta.env["VITE_SUPABASE_URL"],
-      import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"],
-    );
-  }
-
-  return browserClient;
+export function getSupabaseBrowserClient(): SupabaseClient {
+  return supabase;
 }

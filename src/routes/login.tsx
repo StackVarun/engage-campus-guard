@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { redirectAuthenticatedUser } from "@/lib/auth/route-guards";
-import { login } from "@/lib/api/auth.functions";
-import { useServerFn } from "@tanstack/react-start";
+import { getCurrentUser } from "@/lib/api/auth.functions";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: redirectAuthenticatedUser,
@@ -17,7 +17,6 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const router = useRouter();
-  const signIn = useServerFn(login);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
@@ -27,24 +26,31 @@ function LoginPage() {
     setPending(true);
 
     try {
-      const result = await signIn({ data: { email, password } });
-      if (!result.ok) {
-        if (result.error === "ACCOUNT_NOT_PROVISIONED") {
-          toast.error("Your account is not provisioned for SCAAP yet.");
-        } else if (result.error === "EMAIL_NOT_CONFIRMED") {
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        if (/confirm/i.test(error.message)) {
           toast.error("Confirm your email first", {
             description: "Open the confirmation link we emailed you, then sign in.",
           });
         } else {
           toast.error("Invalid email or password.", {
-            description: result.message,
+            description: error.message,
           });
         }
         return;
       }
 
-      await router.navigate({ to: result.user.role === "FACULTY" ? "/faculty" : "/" });
+      const user = await getCurrentUser();
+      if (!user) {
+        await supabase.auth.signOut();
+        toast.error("Your account is not provisioned for SCAAP yet.");
+        return;
+      }
+
       await router.invalidate();
+      await router.navigate({ to: user.role === "FACULTY" ? "/faculty" : "/" });
     } catch {
       toast.error("Unable to sign in. Please try again.");
     } finally {

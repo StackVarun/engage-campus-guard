@@ -1,10 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getCookies, setCookie } from "@tanstack/react-start/server";
+import { getCookies, getRequestHeader, setCookie } from "@tanstack/react-start/server";
 
 function getSupabaseEnvironment() {
-  const url = process.env["VITE_SUPABASE_URL"];
-  const publishableKey = process.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
+  const url = process.env["SUPABASE_URL"] ?? process.env["VITE_SUPABASE_URL"];
+  const publishableKey =
+    process.env["SUPABASE_PUBLISHABLE_KEY"] ?? process.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
 
   if (!url || !publishableKey) {
     throw new Error("Supabase environment is not configured");
@@ -15,8 +16,10 @@ function getSupabaseEnvironment() {
 
 export function getSupabaseServerClient(): SupabaseClient {
   const { url, publishableKey } = getSupabaseEnvironment();
+  const authorization = getRequestHeader("authorization");
 
   return createServerClient(url, publishableKey, {
+    ...(authorization ? { global: { headers: { Authorization: authorization } } } : {}),
     cookies: {
       getAll() {
         return Object.entries(getCookies()).map(([name, value]) => ({ name, value }));
