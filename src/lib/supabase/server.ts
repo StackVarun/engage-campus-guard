@@ -19,7 +19,7 @@ export function getSupabaseServerClient(): SupabaseClient {
   const authorization = getRequestHeader("authorization");
 
   return createServerClient(url, publishableKey, {
-    global: authorization ? { headers: { Authorization: authorization } } : undefined,
+    ...(authorization ? { global: { headers: { Authorization: authorization } } } : {}),
     cookies: {
       getAll() {
         return Object.entries(getCookies()).map(([name, value]) => ({ name, value }));
