@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { redirectAuthenticatedUser } from "@/lib/auth/route-guards";
 import { registerStudent } from "@/lib/api/auth.functions";
+import { studentRegistrationSchema } from "@/lib/validation/auth";
 import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/register")({
@@ -23,10 +24,17 @@ function RegisterPage() {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const parsed = studentRegistrationSchema.safeParse(form);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Please check the details and try again.");
+      return;
+    }
+
     setPending(true);
 
     try {
-      const result = await register({ data: form });
+      const result = await register({ data: parsed.data });
       if (!result.ok) {
         toast.error("Unable to create the account. Check the details and try again.");
         return;
