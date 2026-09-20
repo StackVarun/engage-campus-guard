@@ -13,5 +13,6 @@ export const studentRegistrationSchema = z
     password: z.string().min(8).max(128),
     fullName: z.string().trim().min(2).max(120),
     rollNumber: z.string().trim().min(2).max(40),
+    emailRedirectTo: z.string().url().max(500).optional(),
   })
   .strict();
