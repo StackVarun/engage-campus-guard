@@ -30,3 +30,18 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Supabase foundation
+
+Phase 1 uses Supabase Auth with cookie-backed SSR sessions and PostgreSQL with
+Row Level Security. Copy `.env.example` to `.env.local` and set the Supabase
+project URL and publishable key before running the app.
+
+Apply `supabase/migrations/20260919000000_phase1_foundation.sql` to the project
+before registering users. Public registration creates student accounts only;
+faculty accounts must be provisioned in Supabase and assigned the `FACULTY`
+role in `public.user_accounts` with a matching `faculty_profiles` row.
+
+The browser never receives a service-role key. All application mutations run
+through TanStack Start server functions and are checked against the authenticated
+Supabase user as well as PostgreSQL RLS policies.

@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { aiSuggestedPrompts, todaySchedule } from "@/lib/mock-data";
+import { requireRouteRole } from "@/lib/auth/route-guards";
 
 export const Route = createFileRoute("/assistant")({
+  beforeLoad: () => requireRouteRole("STUDENT"),
   head: () => ({
     meta: [
       { title: "AI Tutor — PresenceOS" },
@@ -32,7 +34,7 @@ type Message = { role: "user" | "assistant"; text: string };
 const seeded: Message[] = [
   {
     role: "assistant",
-    text: "Hi Varun — I can see today's timetable and your subject performance. Ask me about a lecture, a weak topic, or what to study in your 12:30 free block.",
+    text: "Hi — I can see your timetable and subject performance. Ask me about a lecture, a weak topic, or what to study in your next free block.",
   },
 ];
 
@@ -147,13 +149,17 @@ function AssistantPage() {
               <h3 className="font-display text-base font-semibold">Recently discussed</h3>
             </div>
             <ul className="mt-3 space-y-2">
-              {["TCP congestion control", "Kubernetes autoscaling", "SLR vs LALR tables"].map((t) => (
-                <li key={t} className="rounded-lg bg-secondary/40 px-3 py-2 text-sm">
-                  {t}
-                </li>
-              ))}
+              {["TCP congestion control", "Kubernetes autoscaling", "SLR vs LALR tables"].map(
+                (t) => (
+                  <li key={t} className="rounded-lg bg-secondary/40 px-3 py-2 text-sm">
+                    {t}
+                  </li>
+                ),
+              )}
             </ul>
-            <Badge variant="outline" className="mt-3">12 sessions this week</Badge>
+            <Badge variant="outline" className="mt-3">
+              12 sessions this week
+            </Badge>
           </div>
         </div>
       </div>

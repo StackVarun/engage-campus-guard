@@ -8,6 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   CalendarClock,
   LayoutDashboard,
@@ -17,9 +18,12 @@ import {
   Trophy,
 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { isFaculty, isStudent, type CurrentUser } from "../lib/auth/types";
+import { getCurrentUser, logout } from "../lib/api/auth.functions";
 
 function NotFoundComponent() {
   return (
@@ -114,6 +118,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
   }),
   shellComponent: RootShell,
+  loader: () => getCurrentUser(),
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
@@ -142,7 +147,28 @@ const navItems = [
   { to: "/faculty", label: "Faculty", icon: LineChart },
 ] as const;
 
-function AppNav() {
+function AppNav({ user }: { user: CurrentUser | null }) {
+  const router = useRouter();
+  const signOut = useServerFn(logout);
+  const displayName = user?.profile?.fullName ?? user?.email ?? "Guest";
+  const secondaryLabel = isStudent(user)
+    ? `${user.profile?.rollNumber ?? "Student"} · ${user.profile?.section ?? ""}`
+    : isFaculty(user)
+      ? (user.profile?.department ?? "Faculty")
+      : "Not signed in";
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+  const visibleItems =
+    user?.role === "FACULTY"
+      ? navItems.filter((item) => item.to === "/faculty")
+      : user
+        ? navItems.filter((item) => item.to !== "/faculty")
+        : [];
+
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
@@ -153,7 +179,7 @@ function AppNav() {
           <span className="font-display text-lg font-semibold tracking-tight">PresenceOS</span>
         </Link>
         <nav className="flex flex-1 flex-wrap items-center gap-1">
-          {navItems.map((item) => (
+          {visibleItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
@@ -167,13 +193,39 @@ function AppNav() {
           ))}
         </nav>
         <div className="flex items-center gap-3">
-          <div className="hidden text-right sm:block">
-            <p className="text-sm font-medium leading-tight">Varun T G</p>
-            <p className="text-xs text-muted-foreground">1MS22CS118 · CSE-B</p>
-          </div>
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-secondary text-sm font-semibold">
-            VT
-          </span>
+          {user ? (
+            <>
+              <div className="hidden text-right sm:block">
+                <p className="text-sm font-medium leading-tight">{displayName}</p>
+                <p className="text-xs text-muted-foreground">{secondaryLabel}</p>
+              </div>
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-secondary text-sm font-semibold">
+                {initials || "U"}
+              </span>
+            </>
+          ) : null}
+          {user ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await signOut();
+                await router.navigate({ to: "/login" });
+                await router.invalidate();
+              }}
+            >
+              Sign out
+            </Button>
+          ) : (
+            <>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/login">Sign in</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link to="/register">Register</Link>
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </header>
@@ -182,11 +234,12 @@ function AppNav() {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const user = Route.useLoaderData();
 
   return (
     <QueryClientProvider client={queryClient}>
       <div className="min-h-screen">
-        <AppNav />
+        <AppNav user={user} />
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
           <Outlet />
@@ -196,4 +249,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-

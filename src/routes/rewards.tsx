@@ -1,31 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  Beaker,
-  CalendarCheck,
-  Flame,
-  Lock,
-  Puzzle,
-  Trophy,
-  Users,
-  Zap,
-} from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Beaker, CalendarCheck, Flame, Lock, Puzzle, Trophy, Users, Zap } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { SectionHeader } from "@/components/SectionHeader";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { badges, leaderboard, student, xpTimeline } from "@/lib/mock-data";
+import { badges, leaderboard, xpTimeline } from "@/lib/mock-data";
+import { requireRouteRole } from "@/lib/auth/route-guards";
 
 export const Route = createFileRoute("/rewards")({
+  beforeLoad: () => requireRouteRole("STUDENT"),
+  loader: async () => ({ user: await requireRouteRole("STUDENT") }),
   head: () => ({
     meta: [
       { title: "XP & Badges — PresenceOS" },
@@ -54,6 +40,8 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 function RewardsPage() {
+  const { user } = Route.useLoaderData();
+  const displayName = user.profile?.fullName ?? user.email;
   const weeklyXp = xpTimeline.reduce((s, d) => s + d.xp, 0);
 
   return (
@@ -65,10 +53,33 @@ function RewardsPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Zap} label="Total XP" value={student.xp.toLocaleString()} sub={`Level ${student.level}`} tone="xp" />
-        <StatCard icon={Trophy} label="This week" value={`${weeklyXp} XP`} sub="+18% vs last week" tone="primary" />
-        <StatCard icon={Flame} label="Streak" value={`${student.streak} days`} sub="Keep it alive today" tone="accent" />
-        <StatCard icon={CalendarCheck} label="Badges" value={`${badges.filter((b) => b.earned).length}/${badges.length}`} sub="2 within reach" />
+        <StatCard
+          icon={Zap}
+          label="Total XP"
+          value="0"
+          sub="Available in a later phase"
+          tone="xp"
+        />
+        <StatCard
+          icon={Trophy}
+          label="This week"
+          value={`${weeklyXp} XP`}
+          sub="+18% vs last week"
+          tone="primary"
+        />
+        <StatCard
+          icon={Flame}
+          label="Streak"
+          value="—"
+          sub="Available in a later phase"
+          tone="accent"
+        />
+        <StatCard
+          icon={CalendarCheck}
+          label="Badges"
+          value={`${badges.filter((b) => b.earned).length}/${badges.length}`}
+          sub="2 within reach"
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
@@ -77,9 +88,24 @@ function RewardsPage() {
           <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={xpTimeline}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="day" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--color-border)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="day"
+                  stroke="var(--color-muted-foreground)"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  stroke="var(--color-muted-foreground)"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
                 <Tooltip
                   contentStyle={{
                     background: "var(--color-popover)",
@@ -99,7 +125,7 @@ function RewardsPage() {
           <h3 className="font-display text-lg font-semibold">Cohort leaderboard</h3>
           <ul className="mt-4 space-y-2">
             {leaderboard.map((row) => {
-              const isMe = row.name === student.name;
+              const isMe = row.name === displayName;
               return (
                 <li
                   key={row.rank}
@@ -107,7 +133,9 @@ function RewardsPage() {
                     isMe ? "border border-primary/50 bg-primary/10" : "bg-secondary/40"
                   }`}
                 >
-                  <span className="w-6 font-display text-sm font-semibold text-muted-foreground">#{row.rank}</span>
+                  <span className="w-6 font-display text-sm font-semibold text-muted-foreground">
+                    #{row.rank}
+                  </span>
                   <span className="flex-1 text-sm font-medium">{row.name}</span>
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Flame className="h-3 w-3 text-accent" /> {row.streak}
@@ -123,9 +151,11 @@ function RewardsPage() {
       <div className="surface-card rounded-2xl p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-display text-lg font-semibold">Milestone badges</h3>
-          <span className="text-sm text-muted-foreground">{student.xpToNextLevel} XP to level {student.level + 1}</span>
+          <span className="text-sm text-muted-foreground">
+            Gamification data will be connected in a later phase.
+          </span>
         </div>
-        <Progress value={Math.round((1 - student.xpToNextLevel / 1200) * 100)} className="mt-3 h-2" />
+        <Progress value={0} className="mt-3 h-2" />
 
         <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {badges.map((badge) => {
@@ -134,7 +164,9 @@ function RewardsPage() {
               <li
                 key={badge.id}
                 className={`flex items-start gap-3 rounded-xl border p-4 ${
-                  badge.earned ? "border-xp/50 bg-xp/10" : "border-border bg-secondary/30 opacity-70"
+                  badge.earned
+                    ? "border-xp/50 bg-xp/10"
+                    : "border-border bg-secondary/30 opacity-70"
                 }`}
               >
                 <span
@@ -147,7 +179,10 @@ function RewardsPage() {
                 <div>
                   <p className="font-medium">{badge.name}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{badge.desc}</p>
-                  <Badge variant={badge.earned ? "default" : "outline"} className="mt-2 text-[10px]">
+                  <Badge
+                    variant={badge.earned ? "default" : "outline"}
+                    className="mt-2 text-[10px]"
+                  >
                     {badge.earned ? "Earned" : "Locked"}
                   </Badge>
                 </div>

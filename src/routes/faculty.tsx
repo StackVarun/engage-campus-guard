@@ -1,193 +1,313 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, ShieldAlert, Timer, Users } from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { BookOpen, Building2, GraduationCap, Users } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 
-import { SectionHeader } from "@/components/SectionHeader";
-import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SectionHeader } from "@/components/SectionHeader";
+import { StatCard } from "@/components/StatCard";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  attendanceTrend,
-  facultySessionRoster,
-  subjectAttendance,
-  toolUsage,
-} from "@/lib/mock-data";
+  closeAttendanceSession,
+  getActiveAttendanceSession,
+  startAttendanceSession,
+} from "@/lib/api/attendance.functions";
+import { requireRouteRole } from "@/lib/auth/route-guards";
+import { getMyFacultyClasses, type ClassSummary } from "@/lib/api/classes.functions";
 
 export const Route = createFileRoute("/faculty")({
+  beforeLoad: () => requireRouteRole("FACULTY"),
+  loader: async () => {
+    const user = await requireRouteRole("FACULTY");
+    const classes = await getMyFacultyClasses();
+    return { user, classes };
+  },
   head: () => ({
     meta: [
-      { title: "Faculty Analytics — PresenceOS" },
+      { title: "Faculty Workspace · SCAAP" },
       {
         name: "description",
-        content:
-          "Real-time session rosters, proxy-attempt flags, attendance trends and learning-tool usage for faculty and administration.",
-      },
-      { property: "og:title", content: "Faculty Analytics — PresenceOS" },
-      {
-        property: "og:description",
-        content: "Institutional intelligence on attendance trends, learning habits and tool usage.",
+        content: "Authenticated faculty classes and ownership foundation for SCAAP.",
       },
     ],
   }),
   component: FacultyPage,
 });
 
-const tooltipStyle = {
-  background: "var(--color-popover)",
-  border: "1px solid var(--color-border)",
-  borderRadius: "0.75rem",
-  color: "var(--color-popover-foreground)",
-};
-
 function FacultyPage() {
-  const flagged = facultySessionRoster.filter((r) => r.geo === "fail" || r.face === "review");
+  const { user, classes } = Route.useLoaderData();
+  const profile = user.profile && "employeeNumber" in user.profile ? user.profile : null;
 
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Institutional intelligence"
-        title="Faculty console"
-        description="Cloud Computing · CS605 · LH-301 · live session started 11:30"
-        action={
-          <Button variant="secondary" size="sm">
-            Close attendance window
-          </Button>
-        }
+        eyebrow="Faculty workspace"
+        title={`Welcome, ${profile?.fullName ?? user.email}`}
+        description="Only classes assigned to the authenticated faculty account are loaded here. Attendance sessions and analytics arrive in later phases."
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Users} label="Marked present" value="52/58" sub="89.6% of roster" tone="primary" />
-        <StatCard icon={Timer} label="Median check-in" value="14.8s" sub="Target under 30s" tone="accent" />
-        <StatCard icon={ShieldAlert} label="Proxy blocked" value="4" sub="This week across sections" />
-        <StatCard icon={AlertTriangle} label="Flagged now" value={String(flagged.length)} sub="Needs faculty review" tone="xp" />
+        <StatCard
+          icon={GraduationCap}
+          label="Role"
+          value="Faculty"
+          sub="Server-authorized"
+          tone="primary"
+        />
+        <StatCard
+          icon={BookOpen}
+          label="Assigned classes"
+          value={String(classes.length)}
+          sub="Current account scope"
+          tone="accent"
+        />
+        <StatCard icon={Users} label="Attendance" value="—" sub="Available in Phase 2" />
+        <StatCard
+          icon={Building2}
+          label="Analytics"
+          value="—"
+          sub="Available in a later phase"
+          tone="xp"
+        />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="surface-card rounded-2xl p-6">
-          <h3 className="font-display text-lg font-semibold">Attendance & proxy attempts</h3>
-          <div className="mt-4 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={attendanceTrend}>
-                <defs>
-                  <linearGradient id="present" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--color-chart-1)" stopOpacity={0.5} />
-                    <stop offset="100%" stopColor="var(--color-chart-1)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="week" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Area type="monotone" dataKey="present" stroke="var(--color-chart-1)" fill="url(#present)" strokeWidth={2} />
-                <Line type="monotone" dataKey="proxyBlocked" stroke="var(--color-chart-5)" strokeWidth={2} dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
+      <section className="space-y-4">
+        <SectionHeader
+          eyebrow="Ownership boundary"
+          title="My class offerings"
+          description="Server-side authorization derives faculty ownership from the authenticated Supabase user."
+        />
+        {classes.length > 0 ? (
+          <ul className="grid gap-4 md:grid-cols-2">
+            {classes.map((classOffering) => (
+              <ClassCard key={classOffering.id} classOffering={classOffering} />
+            ))}
+          </ul>
+        ) : (
+          <div className="surface-card rounded-2xl p-6 text-sm text-muted-foreground">
+            No class offerings have been assigned to this faculty account yet.
           </div>
-        </div>
-
-        <div className="surface-card rounded-2xl p-6">
-          <h3 className="font-display text-lg font-semibold">Attendance by subject</h3>
-          <div className="mt-4 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={subjectAttendance}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="subject" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis domain={[70, 100]} stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "var(--color-secondary)" }} />
-                <Bar dataKey="pct" fill="var(--color-chart-2)" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      <div className="surface-card rounded-2xl p-6">
-        <h3 className="font-display text-lg font-semibold">Live session roster</h3>
-        <p className="text-sm text-muted-foreground">Each entry carries QR token, geofence result and liveness selfie.</p>
-        <div className="mt-4 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Roll no.</TableHead>
-                <TableHead>Marked at</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Geofence</TableHead>
-                <TableHead>Face</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {facultySessionRoster.map((row) => (
-                <TableRow key={row.roll}>
-                  <TableCell className="font-medium">{row.name}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{row.roll}</TableCell>
-                  <TableCell className="font-mono text-xs">{row.time}</TableCell>
-                  <TableCell className={row.seconds > 30 ? "text-destructive" : "text-primary"}>
-                    {row.seconds}s
-                  </TableCell>
-                  <TableCell>
-                    {row.geo === "ok" ? (
-                      <Badge variant="secondary" className="gap-1">
-                        <CheckCircle2 className="h-3 w-3" /> Inside
-                      </Badge>
-                    ) : (
-                      <Badge variant="destructive" className="gap-1">
-                        <ShieldAlert className="h-3 w-3" /> Outside
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {row.face === "ok" ? (
-                      <Badge variant="secondary" className="gap-1">
-                        <CheckCircle2 className="h-3 w-3" /> Matched
-                      </Badge>
-                    ) : (
-                      <Badge className="gap-1 bg-warning text-warning-foreground">
-                        <AlertTriangle className="h-3 w-3" /> Review
-                      </Badge>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      <div className="surface-card rounded-2xl p-6">
-        <h3 className="font-display text-lg font-semibold">Learning tool usage</h3>
-        <div className="mt-4 h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={toolUsage} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
-              <XAxis type="number" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis dataKey="tool" type="category" width={120} stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "var(--color-secondary)" }} />
-              <Bar dataKey="sessions" fill="var(--color-chart-3)" radius={[0, 6, 6, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+        )}
+      </section>
     </div>
   );
+}
+
+function ClassCard({ classOffering }: { classOffering: ClassSummary }) {
+  const getActiveSession = useServerFn(getActiveAttendanceSession);
+  const startSession = useServerFn(startAttendanceSession);
+  const closeSession = useServerFn(closeAttendanceSession);
+  const [attendanceSession, setAttendanceSession] = useState<AttendanceSessionView | null>(null);
+  const [loadingSession, setLoadingSession] = useState(true);
+  const [pendingAction, setPendingAction] = useState<"start" | "close" | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const loadAttendanceSession = useCallback(
+    async (showLoading = true) => {
+      if (showLoading) setLoadingSession(true);
+      setErrorMessage(null);
+
+      try {
+        const session = await getActiveSession({ data: { classOfferingId: classOffering.id } });
+        setAttendanceSession(toAttendanceSessionView(session));
+      } catch (error) {
+        setErrorMessage(getAttendanceErrorMessage(error, "Unable to load attendance status."));
+      } finally {
+        if (showLoading) setLoadingSession(false);
+      }
+    },
+    [classOffering.id, getActiveSession],
+  );
+
+  useEffect(() => {
+    void loadAttendanceSession();
+  }, [loadAttendanceSession]);
+
+  useEffect(() => {
+    if (!attendanceSession) return;
+
+    const remainingMilliseconds = new Date(attendanceSession.expiresAt).getTime() - Date.now();
+    const timeout = window.setTimeout(
+      () => {
+        void loadAttendanceSession(false);
+      },
+      Math.max(remainingMilliseconds, 0),
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [attendanceSession, loadAttendanceSession]);
+
+  async function handleStartAttendance() {
+    setPendingAction("start");
+    setErrorMessage(null);
+
+    try {
+      const session = await startSession({
+        data: {
+          classOfferingId: classOffering.id,
+          durationSeconds: 300,
+        },
+      });
+      setAttendanceSession(toAttendanceSessionView(session));
+    } catch (error) {
+      setErrorMessage(getAttendanceErrorMessage(error, "Unable to start attendance session."));
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  async function handleCloseAttendance() {
+    if (!attendanceSession) return;
+
+    setPendingAction("close");
+    setErrorMessage(null);
+
+    try {
+      await closeSession({ data: { attendanceSessionId: attendanceSession.id } });
+      await loadAttendanceSession(false);
+    } catch (error) {
+      setErrorMessage(getAttendanceErrorMessage(error, "Unable to close attendance session."));
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  return (
+    <li className="surface-card rounded-2xl p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
+            {classOffering.courseCode}
+          </p>
+          <h3 className="mt-1 font-display text-xl font-semibold">{classOffering.courseName}</h3>
+        </div>
+        <Badge variant="secondary">Section {classOffering.section}</Badge>
+      </div>
+      <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
+        <div className="rounded-xl bg-secondary/60 p-3">
+          <dt className="text-xs text-muted-foreground">Academic year</dt>
+          <dd className="mt-0.5 font-medium">{classOffering.academicYear}</dd>
+        </div>
+        <div className="rounded-xl bg-secondary/60 p-3">
+          <dt className="text-xs text-muted-foreground">Term</dt>
+          <dd className="mt-0.5 font-medium">{classOffering.term}</dd>
+        </div>
+      </dl>
+      <p className="mt-4 text-sm text-muted-foreground">
+        Room: {classOffering.roomName ?? "Not assigned"}
+      </p>
+      <div className="mt-5 border-t border-border/70 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Attendance session
+            </p>
+            {loadingSession ? (
+              <p className="mt-1 text-sm text-muted-foreground">Checking session status...</p>
+            ) : attendanceSession ? (
+              <p className="mt-1 text-sm font-medium text-primary">Active</p>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">No active session</p>
+            )}
+          </div>
+          {attendanceSession ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pendingAction !== null}
+              onClick={() => void handleCloseAttendance()}
+            >
+              {pendingAction === "close" ? "Closing..." : "Close session"}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={loadingSession || pendingAction !== null}
+              onClick={() => void handleStartAttendance()}
+            >
+              {pendingAction === "start" ? "Starting..." : "Start attendance"}
+            </Button>
+          )}
+        </div>
+        {attendanceSession ? (
+          <div className="mt-4 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Active until {formatAttendanceExpiration(attendanceSession.expiresAt)}
+            </p>
+            {attendanceSession.challengeToken ? (
+              <div className="flex flex-col items-center gap-3 rounded-xl bg-white p-4">
+                <QRCodeSVG
+                  value={JSON.stringify({
+                    attendanceSessionId: attendanceSession.id,
+                    challengeToken: attendanceSession.challengeToken,
+                  })}
+                  size={192}
+                  level="M"
+                  includeMargin
+                  aria-label="Attendance challenge QR code"
+                />
+                <p className="text-center text-sm text-muted-foreground">
+                  Scan this QR code to mark attendance.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-destructive" role="alert">
+                The attendance QR code is unavailable for this session.
+              </p>
+            )}
+          </div>
+        ) : null}
+        {errorMessage ? (
+          <p className="mt-2 text-sm text-destructive" role="alert">
+            {errorMessage}
+          </p>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+type AttendanceSessionView = {
+  id: string;
+  status: "ACTIVE" | "CLOSED";
+  startedAt: string;
+  expiresAt: string;
+  closedAt: string | null;
+  challengeToken: string | null;
+};
+
+function toAttendanceSessionView(
+  session: {
+    id: string;
+    status: "ACTIVE" | "CLOSED";
+    startedAt: string;
+    expiresAt: string;
+    closedAt: string | null;
+    challenge?: { token: string } | null;
+  } | null,
+): AttendanceSessionView | null {
+  if (!session) return null;
+
+  return {
+    id: session.id,
+    status: session.status,
+    startedAt: session.startedAt,
+    expiresAt: session.expiresAt,
+    closedAt: session.closedAt,
+    challengeToken: session.challenge?.token ?? null,
+  };
+}
+
+function formatAttendanceExpiration(expiresAt: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(expiresAt));
+}
+
+function getAttendanceErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }

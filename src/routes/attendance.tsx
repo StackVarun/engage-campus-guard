@@ -1,349 +1,399 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Camera,
-  CheckCircle2,
-  MapPin,
-  QrCode,
-  RefreshCw,
-  ShieldCheck,
-  Timer,
-  XCircle,
-} from "lucide-react";
-import { toast } from "sonner";
+import { createFileRoute } from "@tanstack/react-router";
+import { Scanner, type IDetectedBarcode, type IScannerError } from "@yudiel/react-qr-scanner";
+import { AlertCircle, CheckCircle2, Clock3, RefreshCw, ScanLine } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 
-import { SectionHeader } from "@/components/SectionHeader";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { todaySchedule } from "@/lib/mock-data";
+import { Button } from "@/components/ui/button";
+import { SectionHeader } from "@/components/SectionHeader";
+import {
+  getActiveAttendanceSessionForStudent,
+  submitAttendanceChallenge,
+} from "@/lib/api/attendance.functions";
+import { getMyClasses, type ClassSummary } from "@/lib/api/classes.functions";
+import { requireRouteRole } from "@/lib/auth/route-guards";
+import { submitAttendanceChallengeSchema } from "@/lib/validation/attendance";
 
 export const Route = createFileRoute("/attendance")({
+  beforeLoad: () => requireRouteRole("STUDENT"),
+  loader: async () => {
+    await requireRouteRole("STUDENT");
+    return { classes: await getMyClasses() };
+  },
   head: () => ({
     meta: [
-      { title: "Secure Check-in — PresenceOS" },
+      { title: "Attendance · SCAAP" },
       {
         name: "description",
-        content:
-          "Three-factor attendance: rotating dynamic QR, room-level geofence and a liveness selfie, completed in under 30 seconds.",
-      },
-      { property: "og:title", content: "Secure Check-in — PresenceOS" },
-      {
-        property: "og:description",
-        content: "Dynamic QR + geofencing + face match makes proxy attendance impossible.",
+        content: "Live attendance session status for your enrolled classes.",
       },
     ],
   }),
   component: AttendancePage,
 });
 
-type Step = 0 | 1 | 2 | 3;
-
-const QR_ROTATE_SECONDS = 8;
-
-function randomToken() {
-  return Array.from({ length: 4 }, () =>
-    Math.random().toString(36).slice(2, 6).toUpperCase(),
-  ).join("-");
-}
+type AttendanceSessionState =
+  | { status: "loading" }
+  | { status: "active"; sessionId: string; expiresAt: string }
+  | { status: "inactive" }
+  | { status: "error"; message: string };
 
 function AttendancePage() {
-  const live = todaySchedule.find((s) => s.status === "live") ?? todaySchedule[0]!;
-  const [step, setStep] = useState<Step>(0);
-  const [elapsed, setElapsed] = useState(0);
-  const [running, setRunning] = useState(false);
-  const [token, setToken] = useState("LOADING-QR-CODE");
-  const [ttl, setTtl] = useState(QR_ROTATE_SECONDS);
-  const [geoState, setGeoState] = useState<"idle" | "checking" | "ok" | "fail">("idle");
-  const [distance, setDistance] = useState<number | null>(null);
-  const [selfie, setSelfie] = useState<string | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const { classes } = Route.useLoaderData();
+  const getActiveSession = useServerFn(getActiveAttendanceSessionForStudent);
+  const [sessionStates, setSessionStates] = useState<Record<string, AttendanceSessionState>>(() =>
+    createLoadingStates(classes),
+  );
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
 
-  // Rotating QR token
-  useEffect(() => {
-    setToken(randomToken());
-    const id = setInterval(() => {
-      setTtl((prev) => {
-        if (prev <= 1) {
-          setToken(randomToken());
-          return QR_ROTATE_SECONDS;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Elapsed check-in timer
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => setElapsed((e) => e + 0.1), 100);
-    return () => clearInterval(id);
-  }, [running]);
-
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-  }, []);
-
-  useEffect(() => stopCamera, [stopCamera]);
-
-  const startScan = () => {
-    setRunning(true);
-    setElapsed(0);
-    setStep(1);
-    setGeoState("checking");
-    setTimeout(() => {
-      const d = 6 + Math.round(Math.random() * 8);
-      setDistance(d);
-      setGeoState("ok");
-      setStep(2);
-    }, 1200);
-  };
-
-  const openCamera = async () => {
-    setCameraError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+  const loadAttendanceSessions = useCallback(
+    async (showLoading = true) => {
+      if (showLoading) {
+        setLoading(true);
+        setSessionStates(createLoadingStates(classes));
       }
-    } catch {
-      setCameraError("Camera access blocked. Allow camera permission to complete face verification.");
-    }
-  };
+      setPageError(null);
 
-  const captureSelfie = () => {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth) {
-      setCameraError("Camera not ready yet — start the camera first.");
-      return;
-    }
-    const canvas = document.createElement("canvas");
-    canvas.width = 320;
-    canvas.height = (video.videoHeight / video.videoWidth) * 320;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setSelfie(canvas.toDataURL("image/jpeg", 0.8));
-    stopCamera();
-    setRunning(false);
-    setStep(3);
-    toast.success("Attendance marked", {
-      description: `${live.title} · verified in ${elapsed.toFixed(1)}s`,
-    });
-  };
+      const results = await Promise.all(
+        classes.map(async (classOffering) => {
+          try {
+            const session = await getActiveSession({
+              data: { classOfferingId: classOffering.id },
+            });
 
-  const reset = () => {
-    stopCamera();
-    setStep(0);
-    setElapsed(0);
-    setRunning(false);
-    setGeoState("idle");
-    setDistance(null);
-    setSelfie(null);
-    setCameraError(null);
-  };
+            return {
+              classOfferingId: classOffering.id,
+              state: session
+                ? ({
+                    status: "active",
+                    sessionId: session.id,
+                    expiresAt: session.expiresAt,
+                  } as const)
+                : ({ status: "inactive" } as const),
+            };
+          } catch (error) {
+            return {
+              classOfferingId: classOffering.id,
+              state: {
+                status: "error",
+                message: getAttendanceErrorMessage(
+                  error,
+                  "Unable to load attendance status for this class.",
+                ),
+              } as const,
+            };
+          }
+        }),
+      );
+
+      setSessionStates(
+        Object.fromEntries(results.map(({ classOfferingId, state }) => [classOfferingId, state])),
+      );
+
+      const failedClasses = results.filter((result) => result.state.status === "error");
+      const firstFailedState = failedClasses[0]?.state;
+      if (failedClasses.length > 0) {
+        setPageError(
+          failedClasses.length === 1
+            ? firstFailedState?.status === "error"
+              ? firstFailedState.message
+              : null
+            : "Unable to load attendance status for one or more classes.",
+        );
+      }
+
+      if (showLoading) setLoading(false);
+    },
+    [classes, getActiveSession],
+  );
+
+  useEffect(() => {
+    void loadAttendanceSessions();
+  }, [loadAttendanceSessions]);
+
+  useEffect(() => {
+    const activeExpirations = Object.values(sessionStates)
+      .filter(
+        (state): state is { status: "active"; sessionId: string; expiresAt: string } =>
+          state.status === "active",
+      )
+      .map((state) => new Date(state.expiresAt).getTime())
+      .filter((time) => Number.isFinite(time));
+
+    if (activeExpirations.length === 0) return;
+
+    const nextExpiration = Math.min(...activeExpirations);
+    const timeout = window.setTimeout(
+      () => void loadAttendanceSessions(false),
+      Math.max(nextExpiration - Date.now(), 0) + 50,
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [loadAttendanceSessions, sessionStates]);
 
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Three-factor check-in"
-        title="Secure attendance"
-        description="Dynamic QR rotates every 8 seconds, geofence confirms you are inside the room, and a liveness selfie is stored for faculty audit."
+        eyebrow="Live class status"
+        title="Attendance"
+        description="See whether an attendance session is currently active for each enrolled class."
         action={
-          <Button variant="ghost" size="sm" onClick={reset}>
-            <RefreshCw className="h-4 w-4" /> Reset demo
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={loading}
+            onClick={() => void loadAttendanceSessions()}
+          >
+            <RefreshCw className="h-4 w-4" />
+            {loading ? "Refreshing..." : "Refresh"}
           </Button>
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
-        <div className="surface-card rounded-2xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">Live session</p>
-              <h3 className="mt-1 font-display text-xl font-semibold">{live.title}</h3>
-              <p className="text-sm text-muted-foreground">
-                {live.code} · {live.room} · {live.faculty}
-              </p>
-            </div>
-            <Badge className="bg-primary text-primary-foreground">Open</Badge>
-          </div>
-
-          <div className="relative mt-6 overflow-hidden rounded-2xl border border-border bg-secondary/40 p-6">
-            <div className="mx-auto grid aspect-square w-full max-w-64 grid-cols-8 gap-1 rounded-xl bg-foreground/95 p-3">
-              {Array.from({ length: 64 }).map((_, i) => {
-                const on = (token.charCodeAt(i % token.length) + i * 7) % 3 !== 0;
-                return (
-                  <span
-                    key={i}
-                    className={`aspect-square rounded-[2px] ${on ? "bg-background" : "bg-transparent"}`}
-                  />
-                );
-              })}
-            </div>
-            <div className="pointer-events-none absolute inset-x-10 h-0.5 bg-primary/80 animate-scanline" />
-          </div>
-
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <span className="font-mono text-primary">{token}</span>
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <Timer className="h-3.5 w-3.5" /> rotates in {ttl}s
-            </span>
-          </div>
-          <Progress value={(ttl / QR_ROTATE_SECONDS) * 100} className="mt-2 h-1.5" />
+      {pageError ? (
+        <div
+          className="flex items-start gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+          role="alert"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{pageError}</span>
         </div>
+      ) : null}
 
-        <div className="space-y-4">
-          <div className="surface-card rounded-2xl p-6">
-            <div className="flex items-center justify-between">
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">Check-in timer</p>
-              <span
-                className={`font-display text-3xl font-semibold ${elapsed > 30 ? "text-destructive" : "text-primary"}`}
-              >
-                {elapsed.toFixed(1)}s
-              </span>
-            </div>
-            <Progress value={Math.min((elapsed / 30) * 100, 100)} className="mt-3 h-2" />
-            <p className="mt-2 text-xs text-muted-foreground">Target: complete all three factors in 30 seconds.</p>
-          </div>
-
-          <VerificationStep
-            index={1}
-            active={step === 0}
-            done={step > 0}
-            icon={QrCode}
-            title="Scan the dynamic QR"
-            body="The projected code changes every 8 seconds, so a screenshot shared with a friend expires instantly."
-          >
-            <Button onClick={startScan} disabled={step > 0}>
-              <QrCode className="h-4 w-4" /> Scan code
-            </Button>
-          </VerificationStep>
-
-          <VerificationStep
-            index={2}
-            active={step === 1 || step === 2}
-            done={step > 1}
-            icon={MapPin}
-            title="Geofence verification"
-            body="Your device location is matched against the classroom polygon with a 25 m radius."
-          >
-            {geoState === "checking" ? (
-              <p className="text-sm text-muted-foreground">Locating device…</p>
-            ) : geoState === "ok" ? (
-              <p className="flex items-center gap-2 text-sm text-success">
-                <CheckCircle2 className="h-4 w-4" /> Inside {live.room} · {distance} m from beacon
-              </p>
-            ) : geoState === "fail" ? (
-              <p className="flex items-center gap-2 text-sm text-destructive">
-                <XCircle className="h-4 w-4" /> Outside the classroom geofence
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">Waiting for QR scan.</p>
-            )}
-          </VerificationStep>
-
-          <VerificationStep
-            index={3}
-            active={step === 2}
-            done={step === 3}
-            icon={Camera}
-            title="Liveness selfie"
-            body="A quick front-camera capture is attached to the record so faculty can audit any flagged entry."
-          >
-            {step === 3 && selfie ? (
-              <div className="flex items-center gap-3">
-                <img src={selfie} alt="Captured verification selfie" className="h-16 w-16 rounded-xl object-cover" />
-                <p className="flex items-center gap-2 text-sm text-success">
-                  <ShieldCheck className="h-4 w-4" /> Face captured & matched
-                </p>
-              </div>
-            ) : step === 2 ? (
-              <div className="space-y-3">
-                <video
-                  ref={videoRef}
-                  playsInline
-                  muted
-                  className="h-40 w-full rounded-xl bg-secondary object-cover"
-                />
-                {cameraError ? <p className="text-sm text-destructive">{cameraError}</p> : null}
-                <div className="flex gap-2">
-                  <Button variant="secondary" onClick={openCamera}>
-                    <Camera className="h-4 w-4" /> Start camera
-                  </Button>
-                  <Button onClick={captureSelfie}>Capture & submit</Button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Unlocks after geofence passes.</p>
-            )}
-          </VerificationStep>
-
-          {step === 3 ? (
-            <div className="rounded-2xl border border-primary/50 bg-primary/10 p-5 text-center">
-              <CheckCircle2 className="mx-auto h-8 w-8 text-primary" />
-              <h3 className="mt-2 font-display text-xl font-semibold">Attendance recorded</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {live.title} · verified in {elapsed.toFixed(1)} seconds · +40 XP
-              </p>
-              <Button asChild variant="secondary" className="mt-4">
-                <Link to="/rewards">See XP update</Link>
-              </Button>
-            </div>
-          ) : null}
+      {classes.length === 0 ? (
+        <div className="surface-card rounded-2xl p-6 text-sm text-muted-foreground">
+          You are not enrolled in any classes yet.
         </div>
-      </div>
+      ) : (
+        <ul className="grid gap-4 md:grid-cols-2">
+          {classes.map((classOffering) => (
+            <AttendanceClassCard
+              key={classOffering.id}
+              classOffering={classOffering}
+              state={sessionStates[classOffering.id] ?? { status: "loading" }}
+              onRefresh={() => loadAttendanceSessions(false)}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
-function VerificationStep({
-  index,
-  active,
-  done,
-  icon: Icon,
-  title,
-  body,
-  children,
+function AttendanceClassCard({
+  classOffering,
+  state,
+  onRefresh,
 }: {
-  index: number;
-  active: boolean;
-  done: boolean;
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  body: string;
-  children: React.ReactNode;
+  classOffering: ClassSummary;
+  state: AttendanceSessionState;
+  onRefresh: () => Promise<void>;
 }) {
-  return (
-    <div
-      className={`surface-card rounded-2xl p-5 transition-colors ${
-        active ? "border-primary/60" : done ? "border-success/40" : "opacity-80"
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        <span
-          className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
-            done ? "bg-success text-success-foreground" : active ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
-          }`}
-        >
-          {done ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
-        </span>
-        <div className="flex-1">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Step {index}</p>
-          <h4 className="font-display text-lg font-semibold">{title}</h4>
-          <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-          <div className="mt-3">{children}</div>
-        </div>
-      </div>
-    </div>
+  const submitChallenge = useServerFn(submitAttendanceChallenge);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submittedSessionId, setSubmittedSessionId] = useState<string | null>(null);
+  const activeSessionId = state.status === "active" ? state.sessionId : null;
+  const attendanceRecorded = activeSessionId !== null && submittedSessionId === activeSessionId;
+
+  useEffect(() => {
+    setScannerOpen(false);
+    setScannerError(null);
+    setSubmitting(false);
+  }, [activeSessionId]);
+
+  const handleScan = useCallback(
+    async (detectedCodes: IDetectedBarcode[]) => {
+      if (!activeSessionId || submitting || attendanceRecorded) return;
+
+      const rawValue = detectedCodes.find((code) => code.rawValue)?.rawValue;
+      if (!rawValue) {
+        setScannerError("The QR code did not contain an attendance payload.");
+        return;
+      }
+
+      let decodedPayload: unknown;
+      try {
+        decodedPayload = JSON.parse(rawValue) as unknown;
+      } catch {
+        setScannerError("That QR code is not valid attendance data.");
+        return;
+      }
+
+      const parsedPayload = submitAttendanceChallengeSchema.safeParse(decodedPayload);
+      if (!parsedPayload.success) {
+        setScannerError("That QR code is missing valid attendance information.");
+        return;
+      }
+
+      if (parsedPayload.data.attendanceSessionId !== activeSessionId) {
+        setScannerError("That QR code belongs to a different attendance session.");
+        return;
+      }
+
+      setSubmitting(true);
+      setScannerError(null);
+
+      try {
+        await submitChallenge({ data: parsedPayload.data });
+        setSubmittedSessionId(activeSessionId);
+        setScannerOpen(false);
+      } catch (error) {
+        const message = getAttendanceErrorMessage(error, "Unable to mark attendance.");
+        setScannerError(message);
+
+        if (isAttendanceAlreadyRecordedMessage(message)) {
+          setSubmittedSessionId(activeSessionId);
+          setScannerOpen(false);
+        } else if (isAttendanceEndedMessage(message)) {
+          setScannerOpen(false);
+          await onRefresh();
+        }
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [activeSessionId, attendanceRecorded, onRefresh, submitChallenge, submitting],
   );
+
+  function handleScannerError(error: IScannerError) {
+    setScannerOpen(false);
+    setScannerError(getScannerErrorMessage(error));
+  }
+
+  function openScanner() {
+    setScannerError(null);
+    setScannerOpen(true);
+  }
+
+  return (
+    <li className="surface-card rounded-2xl p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
+            {classOffering.courseCode}
+          </p>
+          <h2 className="mt-1 font-display text-xl font-semibold">{classOffering.courseName}</h2>
+        </div>
+        <Badge variant="secondary">Section {classOffering.section}</Badge>
+      </div>
+
+      <p className="mt-3 text-sm text-muted-foreground">
+        {classOffering.academicYear} · {classOffering.term}
+      </p>
+
+      <div className="mt-5 border-t border-border/70 pt-4">
+        {state.status === "loading" ? (
+          <p className="text-sm text-muted-foreground">Checking attendance status...</p>
+        ) : state.status === "active" ? (
+          <div className="space-y-2">
+            <Badge variant="secondary" className="gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Attendance active
+            </Badge>
+            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Clock3 className="h-4 w-4" />
+              Active until {formatAttendanceExpiration(state.expiresAt)}
+            </p>
+            {attendanceRecorded ? (
+              <Badge variant="secondary" className="gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Attendance recorded
+              </Badge>
+            ) : (
+              <div className="space-y-3 pt-2">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={submitting}
+                    onClick={scannerOpen ? () => setScannerOpen(false) : openScanner}
+                  >
+                    <ScanLine className="h-4 w-4" />
+                    {scannerOpen ? "Stop scanning" : "Scan QR / mark attendance"}
+                  </Button>
+                  {submitting ? (
+                    <p className="self-center text-sm text-muted-foreground">
+                      Marking attendance...
+                    </p>
+                  ) : null}
+                </div>
+                {scannerOpen ? (
+                  <div className="overflow-hidden rounded-xl border border-border/70 bg-black">
+                    <Scanner
+                      onScan={handleScan}
+                      onError={handleScannerError}
+                      constraints={{ facingMode: "environment" }}
+                      styles={{
+                        container: { width: "100%" },
+                        video: { width: "100%", aspectRatio: "1 / 1", objectFit: "cover" },
+                      }}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            )}
+            {scannerError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {scannerError}
+              </p>
+            ) : null}
+          </div>
+        ) : state.status === "inactive" ? (
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <ScanLine className="h-4 w-4" />
+            No active session
+          </p>
+        ) : (
+          <p className="text-sm text-destructive">{state.message}</p>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function createLoadingStates(classes: ClassSummary[]): Record<string, AttendanceSessionState> {
+  return Object.fromEntries(
+    classes.map((classOffering) => [classOffering.id, { status: "loading" }]),
+  ) as Record<string, AttendanceSessionState>;
+}
+
+function formatAttendanceExpiration(expiresAt: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(expiresAt));
+}
+
+function getScannerErrorMessage(error: IScannerError): string {
+  switch (error.kind) {
+    case "permission-denied":
+      return "Camera permission was denied. Allow camera access and try again.";
+    case "no-camera":
+      return "No camera is available on this device.";
+    case "in-use":
+      return "The camera is already being used by another application.";
+    case "insecure-context":
+      return "Camera access requires HTTPS or localhost.";
+    case "unsupported":
+      return "This browser does not support camera QR scanning.";
+    default:
+      return "Unable to start the camera. Check camera access and try again.";
+  }
+}
+
+function isAttendanceAlreadyRecordedMessage(message: string): boolean {
+  return /already been recorded/i.test(message);
+}
+
+function isAttendanceEndedMessage(message: string): boolean {
+  return /expired|closed|not active/i.test(message);
+}
+
+function getAttendanceErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
