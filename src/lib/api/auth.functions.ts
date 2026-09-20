@@ -58,7 +58,7 @@ export const registerStudent = createServerFn({ method: "POST" })
       email: data.email,
       password: data.password,
       options: {
-        emailRedirectTo: data.emailRedirectTo,
+        ...(data.emailRedirectTo ? { emailRedirectTo: data.emailRedirectTo } : {}),
         data: {
           account_type: "STUDENT",
           full_name: data.fullName,
