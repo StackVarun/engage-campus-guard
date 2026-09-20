@@ -14,16 +14,265 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      class_offerings: {
+        Row: {
+          academic_year: string
+          course_id: string
+          created_at: string
+          faculty_id: string
+          id: string
+          room_location_id: string | null
+          section: string
+          term: string
+        }
+        Insert: {
+          academic_year: string
+          course_id: string
+          created_at?: string
+          faculty_id: string
+          id?: string
+          room_location_id?: string | null
+          section: string
+          term: string
+        }
+        Update: {
+          academic_year?: string
+          course_id?: string
+          created_at?: string
+          faculty_id?: string
+          id?: string
+          room_location_id?: string | null
+          section?: string
+          term?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_offerings_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_offerings_faculty_id_fkey"
+            columns: ["faculty_id"]
+            isOneToOne: false
+            referencedRelation: "faculty_profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "class_offerings_room_location_id_fkey"
+            columns: ["room_location_id"]
+            isOneToOne: false
+            referencedRelation: "room_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      courses: {
+        Row: {
+          code: string
+          created_at: string
+          credits: number | null
+          id: string
+          name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          credits?: number | null
+          id?: string
+          name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          credits?: number | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      enrollments: {
+        Row: {
+          class_offering_id: string
+          enrolled_at: string
+          student_id: string
+        }
+        Insert: {
+          class_offering_id: string
+          enrolled_at?: string
+          student_id: string
+        }
+        Update: {
+          class_offering_id?: string
+          enrolled_at?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollments_class_offering_id_fkey"
+            columns: ["class_offering_id"]
+            isOneToOne: false
+            referencedRelation: "class_offerings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      faculty_profiles: {
+        Row: {
+          created_at: string
+          department: string | null
+          employee_number: string | null
+          full_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department?: string | null
+          employee_number?: string | null
+          full_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department?: string | null
+          employee_number?: string | null
+          full_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "faculty_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_locations: {
+        Row: {
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          name: string
+          radius_meters: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latitude: number
+          longitude: number
+          name: string
+          radius_meters?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          name?: string
+          radius_meters?: number
+        }
+        Relationships: []
+      }
+      student_profiles: {
+        Row: {
+          created_at: string
+          department: string | null
+          full_name: string
+          roll_number: string
+          section: string | null
+          semester: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department?: string | null
+          full_name: string
+          roll_number: string
+          section?: string | null
+          semester?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department?: string | null
+          full_name?: string
+          roll_number?: string
+          section?: string | null
+          semester?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_accounts: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      current_app_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      faculty_owns_class: {
+        Args: { faculty_user_id: string; offering_id: string }
+        Returns: boolean
+      }
+      is_enrolled_in_class: {
+        Args: { offering_id: string; student_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "STUDENT" | "FACULTY"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +399,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["STUDENT", "FACULTY"],
+    },
   },
 } as const
