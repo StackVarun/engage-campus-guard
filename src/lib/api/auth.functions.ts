@@ -31,7 +31,12 @@ export const login = createServerFn({ method: "POST" })
     });
 
     if (error) {
-      return { ok: false, error: "INVALID_CREDENTIALS" };
+      const notConfirmed = /confirm/i.test(error.message);
+      return {
+        ok: false,
+        error: notConfirmed ? "EMAIL_NOT_CONFIRMED" : "INVALID_CREDENTIALS",
+        message: error.message,
+      };
     }
 
     // Reuse the client that performed sign-in. Its SSR storage overlay contains
@@ -53,6 +58,7 @@ export const registerStudent = createServerFn({ method: "POST" })
       email: data.email,
       password: data.password,
       options: {
+        emailRedirectTo: data.emailRedirectTo,
         data: {
           account_type: "STUDENT",
           full_name: data.fullName,
@@ -62,7 +68,11 @@ export const registerStudent = createServerFn({ method: "POST" })
     });
 
     if (error || !authData.user) {
-      return { ok: false as const, error: "SIGNUP_FAILED" as const };
+      return {
+        ok: false as const,
+        error: "SIGNUP_FAILED" as const,
+        message: error?.message,
+      };
     }
 
     const user = await getCurrentUserServer();
