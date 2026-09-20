@@ -14,6 +14,118 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance_challenges: {
+        Row: {
+          attendance_session_id: string
+          challenge_token: string
+          created_at: string
+          expires_at: string
+          id: string
+          issued_at: string
+        }
+        Insert: {
+          attendance_session_id: string
+          challenge_token?: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          issued_at?: string
+        }
+        Update: {
+          attendance_session_id?: string
+          challenge_token?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          issued_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_challenges_attendance_session_id_fkey"
+            columns: ["attendance_session_id"]
+            isOneToOne: true
+            referencedRelation: "attendance_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attendance_records: {
+        Row: {
+          attendance_session_id: string
+          id: string
+          marked_at: string
+          student_id: string
+        }
+        Insert: {
+          attendance_session_id: string
+          id?: string
+          marked_at?: string
+          student_id: string
+        }
+        Update: {
+          attendance_session_id?: string
+          id?: string
+          marked_at?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_records_attendance_session_id_fkey"
+            columns: ["attendance_session_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_records_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      attendance_sessions: {
+        Row: {
+          class_offering_id: string
+          closed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          started_at: string
+          started_by: string
+          status: Database["public"]["Enums"]["attendance_session_status"]
+        }
+        Insert: {
+          class_offering_id: string
+          closed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          started_at?: string
+          started_by: string
+          status?: Database["public"]["Enums"]["attendance_session_status"]
+        }
+        Update: {
+          class_offering_id?: string
+          closed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          started_at?: string
+          started_by?: string
+          status?: Database["public"]["Enums"]["attendance_session_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_sessions_class_offering_id_started_by_fkey"
+            columns: ["class_offering_id", "started_by"]
+            isOneToOne: false
+            referencedRelation: "class_offerings"
+            referencedColumns: ["id", "faculty_id"]
+          },
+        ]
+      }
       class_offerings: {
         Row: {
           academic_year: string
@@ -258,21 +370,97 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      close_attendance_session: {
+        Args: { p_attendance_session_id: string }
+        Returns: {
+          class_offering_id: string
+          closed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          started_at: string
+          started_by: string
+          status: Database["public"]["Enums"]["attendance_session_status"]
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "attendance_sessions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       current_app_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      faculty_owns_attendance_session: {
+        Args: { attendance_session_id: string; faculty_user_id: string }
+        Returns: boolean
       }
       faculty_owns_class: {
         Args: { faculty_user_id: string; offering_id: string }
         Returns: boolean
       }
+      get_attendance_submission_context: {
+        Args: { p_attendance_session_id: string; p_challenge_token: string }
+        Returns: {
+          already_recorded: boolean
+          challenge_exists: boolean
+          challenge_expires_at: string
+          challenge_session_id: string
+          enrolled: boolean
+          session_exists: boolean
+          session_expires_at: string
+          session_id: string
+          session_started_at: string
+          session_status: Database["public"]["Enums"]["attendance_session_status"]
+          student_profile_exists: boolean
+        }[]
+      }
       is_enrolled_in_class: {
         Args: { offering_id: string; student_user_id: string }
         Returns: boolean
       }
+      start_attendance_session: {
+        Args: { p_class_offering_id: string; p_duration_seconds: number }
+        Returns: {
+          challenge_expires_at: string
+          challenge_id: string
+          challenge_issued_at: string
+          challenge_token: string
+          class_offering_id: string
+          closed_at: string
+          expires_at: string
+          session_created_at: string
+          session_id: string
+          started_at: string
+          started_by: string
+          status: Database["public"]["Enums"]["attendance_session_status"]
+        }[]
+      }
+      student_can_access_attendance_session: {
+        Args: { attendance_session_id: string; student_user_id: string }
+        Returns: boolean
+      }
+      submit_attendance_challenge: {
+        Args: { p_attendance_session_id: string; p_challenge_token: string }
+        Returns: {
+          attendance_session_id: string
+          id: string
+          marked_at: string
+          student_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "attendance_records"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       app_role: "STUDENT" | "FACULTY"
+      attendance_session_status: "ACTIVE" | "CLOSED"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -401,6 +589,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["STUDENT", "FACULTY"],
+      attendance_session_status: ["ACTIVE", "CLOSED"],
     },
   },
 } as const
